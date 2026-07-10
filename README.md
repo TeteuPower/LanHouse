@@ -61,12 +61,16 @@ direto. Na maioria dos casos, após 1–2 segundos o tráfego passa a ser P2P e 
 ## Empacotar para compartilhar
 
 ```powershell
-.\scripts\package.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1
 ```
 
-Gera `dist\VirtualLan\` (com `VirtualLan.exe` autocontido, `LEIA-ME.txt` e o tutorial) e um
-`dist\VirtualLan.zip` pronto para mandar ao amigo — ele extrai e abre, sem instalar o .NET. Os
-binários avançados (relay dedicado Windows/Linux e o cliente CLI) ficam em `dist\extras\`.
+Um comando faz tudo, de forma **autônoma**: instala o .NET SDK localmente se faltar, roda os
+testes, publica `VirtualLan.exe` autocontido, embute o driver TAP, e gera `dist\VirtualLan.zip`
+pronto para mandar ao amigo — ele extrai e abre, sem instalar .NET nem OpenVPN. Os binários
+avançados (relay dedicado Windows/Linux e o cliente CLI) ficam em `dist\extras\`.
+
+Passo a passo completo de compilação a partir do código-fonte em
+[`COMO-COMPILAR.md`](COMO-COMPILAR.md).
 
 ## Instalação
 

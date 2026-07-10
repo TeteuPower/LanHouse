@@ -5,6 +5,8 @@ dist/
 .vs/
 .idea/
 TestResults/
+# SDK do .NET instalado localmente pelo scripts/ensure-dotnet.ps1 (build autônomo)
+.dotnet/
 # residuo de sandbox (nao consegui apagar do mount; ignore)
 _probe.txt
 **/_probe.txt

@@ -27,6 +27,9 @@ $dist   = Join-Path $root 'dist'
 $app    = Join-Path $dist 'VirtualLan'
 $extras = Join-Path $dist 'extras'
 
+# Garante um .NET SDK 8+ (instala local em .dotnet se faltar). Torna o build autonomo.
+$dotnet = (& "$PSScriptRoot\ensure-dotnet.ps1" -Channel '8.0' | Select-Object -Last 1)
+
 Write-Host '==> Limpando dist' -ForegroundColor Cyan
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 New-Item -ItemType Directory -Force $app | Out-Null
@@ -35,7 +38,7 @@ New-Item -ItemType Directory -Force $extras | Out-Null
 if (-not $SkipTests) {
     Write-Host '==> Rodando os testes' -ForegroundColor Cyan
     $env:DOTNET_ROLL_FORWARD = 'Major'
-    dotnet test "$root\tests\VirtualLan.Core.Tests\VirtualLan.Core.Tests.csproj" -c $Configuration --nologo
+    & $dotnet test "$root\tests\VirtualLan.Core.Tests\VirtualLan.Core.Tests.csproj" -c $Configuration --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Testes falharam.' }
 }
 
@@ -49,7 +52,7 @@ $common = @(
 )
 
 Write-Host '==> Publicando a GUI (VirtualLan.exe, win-x64, autocontido)' -ForegroundColor Cyan
-dotnet publish "$root\src\VirtualLan.App\VirtualLan.App.csproj" -r win-x64 @common -o $app
+& $dotnet publish "$root\src\VirtualLan.App\VirtualLan.App.csproj" -r win-x64 @common -o $app
 if ($LASTEXITCODE -ne 0) { throw 'Publish da GUI falhou.' }
 
 # Referenciar os projetos exe (Node/Relay) deixa .runtimeconfig.json e .pdb soltos no publish.
@@ -77,11 +80,11 @@ catch {
 }
 
 Write-Host '==> Publicando extras (relay Windows/Linux e CLI)' -ForegroundColor Cyan
-dotnet publish "$root\src\VirtualLan.Relay\VirtualLan.Relay.csproj" -r win-x64   @common -o (Join-Path $extras 'relay-win-x64')
+& $dotnet publish "$root\src\VirtualLan.Relay\VirtualLan.Relay.csproj" -r win-x64   @common -o (Join-Path $extras 'relay-win-x64')
 if ($LASTEXITCODE -ne 0) { throw 'Publish do relay (win) falhou.' }
-dotnet publish "$root\src\VirtualLan.Relay\VirtualLan.Relay.csproj" -r linux-x64 @common -o (Join-Path $extras 'relay-linux-x64')
+& $dotnet publish "$root\src\VirtualLan.Relay\VirtualLan.Relay.csproj" -r linux-x64 @common -o (Join-Path $extras 'relay-linux-x64')
 if ($LASTEXITCODE -ne 0) { throw 'Publish do relay (linux) falhou.' }
-dotnet publish "$root\src\VirtualLan.Node\VirtualLan.Node.csproj"   -r win-x64   @common -o (Join-Path $extras 'cli-win-x64')
+& $dotnet publish "$root\src\VirtualLan.Node\VirtualLan.Node.csproj"   -r win-x64   @common -o (Join-Path $extras 'cli-win-x64')
 if ($LASTEXITCODE -ne 0) { throw 'Publish do CLI falhou.' }
 
 Get-ChildItem $extras -Filter *.pdb -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
