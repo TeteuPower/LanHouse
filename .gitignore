@@ -1,0 +1,10 @@
+bin/
+obj/
+dist/
+*.user
+.vs/
+.idea/
+TestResults/
+# residuo de sandbox (nao consegui apagar do mount; ignore)
+_probe.txt
+**/_probe.txt

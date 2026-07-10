@@ -1,0 +1,37 @@
+; systemd unit para o relay. Copie para /etc/systemd/system/vlan-relay.service
+;
+;   sudo useradd --system --no-create-home --shell /usr/sbin/nologin vlan
+;   sudo install -m 0755 vlan-relay /usr/local/bin/vlan-relay
+;   sudo systemctl enable --now vlan-relay
+;
+; Não esqueça de liberar a porta:
+;   sudo ufw allow 7777/udp
+
+[Unit]
+Description=VirtualLan relay (rendezvous + fallback de dados)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vlan
+Group=vlan
+ExecStart=/usr/local/bin/vlan-relay --port 7777
+Restart=always
+RestartSec=2
+
+# O relay não precisa de privilégio nenhum: bind em porta > 1024, sem acesso a disco.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryDenyWriteExecute=false
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

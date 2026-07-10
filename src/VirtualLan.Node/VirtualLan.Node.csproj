@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Exigido pelo source generator do [LibraryImport]. Nao escrevemos unsafe a mao. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <RootNamespace>VirtualLan.Node</RootNamespace>
+    <AssemblyName>vlan</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Permite compilar em Linux/CI mesmo com TFM -windows (P/Invoke so resolve em runtime). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Abrir o device TAP e rodar netsh exigem elevacao; o manifesto pede UAC na hora certa. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VirtualLan.Core\VirtualLan.Core.csproj" />
+  </ItemGroup>
+
+</Project>
