@@ -161,16 +161,25 @@ public sealed class NodeService(NodeOptions options) : IDisposable
             SendBufferSize = 1 << 20,
         };
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        try
         {
-            // Um peer que saiu gera ICMP port-unreachable; sem isto o próximo Receive lança
-            // ConnectionReset e mata o laço. É a pegadinha clássica de UDP no Windows.
-            const int SIO_UDP_CONNRESET = -1744830452;
-            socket.IOControl(SIO_UDP_CONNRESET, [0, 0, 0, 0], null);
-        }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Um peer que saiu gera ICMP port-unreachable; sem isto o próximo Receive lança
+                // ConnectionReset e mata o laço. É a pegadinha clássica de UDP no Windows.
+                const int SIO_UDP_CONNRESET = -1744830452;
+                socket.IOControl(SIO_UDP_CONNRESET, [0, 0, 0, 0], null);
+            }
 
-        socket.Bind(new IPEndPoint(IPAddress.Any, localPort));
-        return socket;
+            socket.Bind(new IPEndPoint(IPAddress.Any, localPort));
+            return socket;
+        }
+        catch
+        {
+            // Falha ao configurar/bindar (ex.: porta em uso): não vaza o handle nativo.
+            socket.Dispose();
+            throw;
+        }
     }
 
     // -------------------------------------------------------------------------- TAP → rede

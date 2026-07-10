@@ -22,6 +22,7 @@ internal sealed class RelayHost : IDisposable
     private Task? _runTask;
     private bool _firewallAdded;
     private bool _upnpMapped;
+    private Upnp.IgdService? _igd;
 
     public RelayHost(int port) => _port = port;
 
@@ -47,6 +48,7 @@ internal sealed class RelayHost : IDisposable
         progress?.Report("Tentando abrir a porta no roteador automaticamente (UPnP)...");
         var map = await Upnp.TryMapUdpAsync(_port, "VirtualLan relay", ct).ConfigureAwait(false);
         _upnpMapped = map.Success;
+        _igd = map.Service;
 
         PublicIp = map.ExternalIp ?? await TryGetPublicIpAsync(ct).ConfigureAwait(false);
 
@@ -125,14 +127,19 @@ internal sealed class RelayHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Libera tudo. Faz I/O de rede (remover o mapeamento UPnP) e de processo (netsh) de forma
+    /// síncrona — por isso o chamador deve invocar isto FORA da thread da UI (ex.: em Task.Run),
+    /// para não congelar a janela. Usa o serviço UPnP já descoberto, sem redescoberta lenta.
+    /// </summary>
     public void Dispose()
     {
         try { _cts?.Cancel(); } catch { /* já parado */ }
 
         try
         {
-            if (_upnpMapped)
-                Upnp.TryUnmapUdpAsync(_port, CancellationToken.None).GetAwaiter().GetResult();
+            if (_upnpMapped && _igd is not null)
+                Upnp.TryDeleteMappingAsync(_igd, _port, CancellationToken.None).GetAwaiter().GetResult();
         }
         catch { /* melhor-esforço */ }
 

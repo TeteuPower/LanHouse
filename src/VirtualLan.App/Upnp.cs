@@ -16,11 +16,12 @@ internal static class Upnp
 {
     private static readonly IPEndPoint SsdpEndpoint = new(IPAddress.Parse("239.255.255.250"), 1900);
 
-    public sealed record MapResult(bool Success, string? ExternalIp, string? Detail);
+    // Tudo interno: o Upnp só é usado dentro do processo da GUI.
+    internal sealed record MapResult(bool Success, string? ExternalIp, string? Detail, IgdService? Service = null);
 
-    private sealed record IgdService(Uri ControlUrl, string ServiceType, string GatewayHost);
+    internal sealed record IgdService(Uri ControlUrl, string ServiceType, string GatewayHost);
 
-    public static async Task<MapResult> TryMapUdpAsync(int port, string description, CancellationToken ct)
+    internal static async Task<MapResult> TryMapUdpAsync(int port, string description, CancellationToken ct)
     {
         try
         {
@@ -32,7 +33,8 @@ internal static class Upnp
             bool added = await AddPortMappingAsync(service, port, localIp, description, ct).ConfigureAwait(false);
             string? external = await GetExternalIpAsync(service, ct).ConfigureAwait(false);
 
-            return new MapResult(added, external, added ? null : "o roteador recusou o mapeamento");
+            // Guarda o serviço para a remoção do mapeamento não precisar redescobrir o roteador.
+            return new MapResult(added, external, added ? null : "o roteador recusou o mapeamento", service);
         }
         catch (Exception ex)
         {
@@ -40,18 +42,16 @@ internal static class Upnp
         }
     }
 
-    public static async Task TryUnmapUdpAsync(int port, CancellationToken ct)
+    /// <summary>Remove o mapeamento usando um serviço já descoberto (sem redescoberta, rápido).</summary>
+    internal static async Task TryDeleteMappingAsync(IgdService service, int port, CancellationToken ct)
     {
         try
         {
-            var service = await DiscoverAsync(ct).ConfigureAwait(false);
-            if (service is null) return;
-
             await DeletePortMappingAsync(service, port, ct).ConfigureAwait(false);
         }
         catch
         {
-            // Limpeza é melhor-esforço: um mapeamento órfão expira sozinho ou pode ser removido no roteador.
+            // Limpeza é melhor-esforço: um mapeamento órfão pode ser removido no painel do roteador.
         }
     }
 
@@ -117,6 +117,13 @@ internal static class Upnp
             var doc = XDocument.Parse(xml);
             var gatewayUri = new Uri(descriptionUrl);
 
+            // A especificação UPnP manda resolver URLs relativas contra <URLBase>, se presente,
+            // e só cair para a URL da descrição (LOCATION) quando não houver URLBase.
+            Uri baseUri = gatewayUri;
+            string? urlBase = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "URLBase")?.Value;
+            if (!string.IsNullOrWhiteSpace(urlBase) && Uri.TryCreate(urlBase.Trim(), UriKind.Absolute, out var parsedBase))
+                baseUri = parsedBase;
+
             foreach (var serviceElement in doc.Descendants().Where(e => e.Name.LocalName == "service"))
             {
                 string? type = ChildValue(serviceElement, "serviceType");
@@ -125,7 +132,7 @@ internal static class Upnp
                 if (type is null || controlUrl is null) continue;
                 if (!type.Contains("WANIPConnection") && !type.Contains("WANPPPConnection")) continue;
 
-                var absoluteControl = new Uri(gatewayUri, controlUrl);
+                var absoluteControl = new Uri(baseUri, controlUrl);
                 return new IgdService(absoluteControl, type, gatewayUri.Host);
             }
         }

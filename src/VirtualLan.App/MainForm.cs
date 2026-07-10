@@ -48,8 +48,10 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? _nodeCts;
     private Task? _nodeTask;
     private RelayHost? _relayHost;
+    private CancellationTokenSource? _connectCts;
     private bool _connected;
     private bool _busy;
+    private bool _closing;
 
     public MainForm()
     {
@@ -225,10 +227,19 @@ internal sealed class MainForm : Form
         var copy = new Button { Text = "Copiar", AutoSize = true, Margin = new Padding(8, 3, 3, 3) };
         copy.Click += (_, _) =>
         {
-            if (!string.IsNullOrWhiteSpace(_shareBox.Text))
+            if (string.IsNullOrWhiteSpace(_shareBox.Text)) return;
+
+            try
             {
+                // A área de transferência pode estar momentaneamente presa por outro app
+                // (gerenciador de clipboard, RDP, Office). Nunca deixe isso derrubar o programa.
                 Clipboard.SetText(_shareBox.Text);
                 ApplyStatus(Color.SeaGreen, "Endereço copiado — cole para o seu amigo.");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Não consegui copiar para a área de transferência: {ex.Message}");
+                ApplyStatus(Color.DarkOrange, "Não consegui copiar. Selecione o endereço e copie com Ctrl+C.");
             }
         };
 
@@ -402,7 +413,17 @@ internal sealed class MainForm : Form
 
     // ==================================================================== Modo servidor
 
-    private void OnHostModeChanged(object? sender, EventArgs e) => ApplyHostModeUi();
+    private void OnHostModeChanged(object? sender, EventArgs e)
+    {
+        // Antes de trocar o rótulo/valor do campo, guarda o que o usuário já digitou no modo
+        // anterior, para não apagar o endereço/porta ao alternar a caixa.
+        if (_hostCheck.Checked)
+            _settings.Relay = _relayBox.Text.Trim();                          // vinha do modo "entrar"
+        else if (int.TryParse(_relayBox.Text.Trim(), out int typedPort))
+            _settings.HostPort = typedPort;                                    // vinha do modo "servidor"
+
+        ApplyHostModeUi();
+    }
 
     private void ApplyHostModeUi()
     {
@@ -453,6 +474,10 @@ internal sealed class MainForm : Form
         SetBusy(true);
         Log.MinimumLevel = _verboseCheck.Checked ? LogLevel.Debug : LogLevel.Info;
 
+        _connectCts?.Dispose();
+        _connectCts = new CancellationTokenSource();
+        var ct = _connectCts.Token;
+
         var progress = new Progress<string>(m => ApplyStatus(Color.DarkOrange, m));
 
         try
@@ -463,7 +488,9 @@ internal sealed class MainForm : Form
             {
                 ApplyStatus(Color.DarkOrange, "Primeira execução: preparando o adaptador de rede virtual...");
                 await Task.Run(() => TapInstaller.EnsureInstalledAsync(
-                    adapter ?? TapInstaller.DefaultAdapterName, progress, CancellationToken.None));
+                    adapter ?? TapInstaller.DefaultAdapterName, progress, ct), ct);
+
+                if (_closing || IsDisposed) return;
                 PopulateAdapters();
                 adapter = SelectedAdapterOrNull();
             }
@@ -471,7 +498,11 @@ internal sealed class MainForm : Form
             if (host)
             {
                 _relayHost = new RelayHost(relayPort);
-                await _relayHost.StartAsync(progress, CancellationToken.None);
+                // Task.Run: StartAsync roda netsh (firewall) e UPnP de forma bloqueante; nada disso
+                // pode acontecer na thread da UI, senão a janela congela durante "Iniciando...".
+                await Task.Run(() => _relayHost.StartAsync(progress, ct), ct);
+
+                if (_closing || IsDisposed) return;
                 ShowShare(_relayHost.ShareAddress ?? "(não descobri seu IP público — veja o Registro)");
             }
 
@@ -491,8 +522,15 @@ internal sealed class MainForm : Form
             SetBusy(false);
             UpdateButtons();
         }
+        catch (OperationCanceledException)
+        {
+            // A janela foi fechada durante a conexão. O _relayHost (se criado) é liberado no
+            // fechamento; aqui não há mais UI para atualizar.
+            if (!_closing && !IsDisposed) CleanupToDisconnected(null);
+        }
         catch (Exception ex)
         {
+            if (_closing || IsDisposed) return;
             Log.Error("Não foi possível conectar", ex);
             CleanupToDisconnected(ex.Message);
             ShowError(ex.Message);
@@ -581,7 +619,14 @@ internal sealed class MainForm : Form
         if (_nodeCts is not null) { try { _nodeCts.Dispose(); } catch { /* idem */ } _nodeCts = null; }
         _nodeTask = null;
 
-        if (_relayHost is not null) { _relayHost.Dispose(); _relayHost = null; }
+        // Dispose do relay host faz I/O de rede (remover mapeamento UPnP) e netsh: joga para uma
+        // thread de fundo para a UI não congelar por segundos ao desconectar.
+        if (_relayHost is not null)
+        {
+            var host = _relayHost;
+            _relayHost = null;
+            _ = Task.Run(() => host.Dispose());
+        }
 
         HideShare();
 
@@ -645,12 +690,28 @@ internal sealed class MainForm : Form
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        // Fechar pela bandeja/menu "Sair" ou pelo botão X encerra de verdade e desconecta limpo.
+        _closing = true;
+
+        // Cancela uma conexão em andamento (instalação do TAP / início do relay) para a
+        // continuação de OnConnectClick não tocar em controles já descartados.
+        _connectCts?.Cancel();
+
+        // Persiste as preferências ao sair, mesmo sem ter conectado (ex.: o usuário desmarcou
+        // "lembrar senha" e fechou a janela sem clicar Conectar).
+        SaveSettingsFromUi();
+
         if (_connected)
         {
             _nodeCts?.Cancel();
             try { _nodeTask?.Wait(TimeSpan.FromSeconds(2)); } catch { /* melhor-esforço */ }
-            if (_relayHost is not null) { _relayHost.Dispose(); _relayHost = null; }
+        }
+
+        // Libera o relay host FORA da thread da UI, com teto de tempo, para não travar o fechamento.
+        var host = _relayHost;
+        _relayHost = null;
+        if (host is not null)
+        {
+            try { Task.Run(() => host.Dispose()).Wait(TimeSpan.FromSeconds(3)); } catch { /* melhor-esforço */ }
         }
 
         Log.MessageLogged -= OnLogMessage;
@@ -775,6 +836,7 @@ internal sealed class MainForm : Form
         {
             try { _node?.Dispose(); } catch { /* idem */ }
             try { _relayHost?.Dispose(); } catch { /* idem */ }
+            try { _connectCts?.Dispose(); } catch { /* idem */ }
             _peersTimer.Dispose();
         }
 

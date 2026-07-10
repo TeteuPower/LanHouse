@@ -87,10 +87,19 @@ public static class TapInstaller
         {
             var target = adapters[0];
             Report(progress, $"Renomeando '{target.Name}' → '{adapterName}'...");
-            RenameAdapter(target.Name, adapterName);
+
+            if (!RenameAdapter(target.Name, adapterName))
+                Log.Warn($"Não consegui renomear o adaptador para '{adapterName}'. Ele funciona pelo nome atual.");
+
+            adapters = TapAdapterLocator.FindAll();
         }
 
-        Report(progress, $"Adaptador '{adapterName}' pronto para uso.");
+        // Reporta o nome REAL do adaptador pronto — se o rename falhou, o app usa esse nome.
+        string readyName =
+            adapters.FirstOrDefault(a => string.Equals(a.Name, adapterName, StringComparison.OrdinalIgnoreCase))?.Name
+            ?? adapters[0].Name;
+
+        Report(progress, $"Adaptador '{readyName}' pronto para uso.");
     }
 
     // ---------------------------------------------------------------- Localização das ferramentas
@@ -217,8 +226,12 @@ public static class TapInstaller
         }
     }
 
-    private static void RenameAdapter(string oldName, string newName)
-        => Run("netsh", $"interface set interface name=\"{oldName}\" newname=\"{newName}\"", workingDirectory: null);
+    private static bool RenameAdapter(string oldName, string newName)
+    {
+        var (exit, output) = Run("netsh", $"interface set interface name=\"{oldName}\" newname=\"{newName}\"", workingDirectory: null);
+        if (exit != 0) Log.Debug($"netsh rename '{oldName}'→'{newName}' saiu com {exit}. {output}");
+        return exit == 0;
+    }
 
     // ---------------------------------------------------------------- Utilitários
 
