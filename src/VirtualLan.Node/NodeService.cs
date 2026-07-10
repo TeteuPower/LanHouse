@@ -47,8 +47,55 @@ public sealed class NodeService(NodeOptions options) : IDisposable
     private long _framesToNetwork;
     private long _framesToTap;
 
+    // ---- Observação para a GUI (a lógica de rede não depende disto) --------------------------
+
+    /// <summary>Disparado a cada mudança de estágio de conexão. Handler pode vir de outra thread.</summary>
+    public event Action<NodeConnectionState, string?>? StateChanged;
+
+    /// <summary>Estágio atual da conexão.</summary>
+    public NodeConnectionState State { get; private set; } = NodeConnectionState.Idle;
+
+    /// <summary>IP virtual atribuído pelo relay, ou null enquanto não registrado.</summary>
+    public IPAddress? VirtualAddress { get; private set; }
+
+    /// <summary>networkId curto (o relay agrupa sessões por ele). Útil para conferir se bate com o peer.</summary>
+    public string NetworkIdShort => _keys?.NetworkId.ToShortString() ?? "—";
+
+    public long FramesToNetwork => Volatile.Read(ref _framesToNetwork);
+    public long FramesToTap => Volatile.Read(ref _framesToTap);
+    public int PeerCount => _peers.Count;
+
+    private void SetState(NodeConnectionState state, string? detail = null)
+    {
+        State = state;
+        StateChanged?.Invoke(state, detail);
+    }
+
+    /// <summary>Fotografia dos peers para a GUI. Ordenada por índice (IP virtual).</summary>
+    public IReadOnlyList<PeerView> SnapshotPeers()
+    {
+        var list = new List<PeerView>(_peers.Count);
+
+        foreach (var peer in _peers.Values)
+        {
+            var direct = peer.DirectEndpointIfAlive;
+            list.Add(new PeerView(
+                peer.Index,
+                $"25.0.0.{peer.Index}",
+                peer.Mac.ToString(),
+                peer.NodeId.ToShortString(),
+                peer.State,
+                direct is not null ? $"direto {direct}" : "via relay"));
+        }
+
+        list.Sort(static (a, b) => a.Index.CompareTo(b.Index));
+        return list;
+    }
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        SetState(NodeConnectionState.Resolving);
+
         _keys = NetworkKeys.Derive(_options.NetworkName, _options.Password);
         _cipher = new FrameCipher(_keys, _nodeId);
 
@@ -63,6 +110,8 @@ public sealed class NodeService(NodeOptions options) : IDisposable
 
         var boundPort = ((IPEndPoint)_socket.LocalEndPoint!).Port;
         Log.Info($"Socket UDP local em 0.0.0.0:{boundPort}, relay em {_relayEndpoint}");
+
+        SetState(NodeConnectionState.Connecting);
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -317,7 +366,9 @@ public sealed class NodeService(NodeOptions options) : IDisposable
             NetworkConfigurator.TrySetPrivateProfile(_tap.Adapter.Name);
             NetworkConfigurator.EnsureFirewallRule(NodeOptions.FirewallRuleName, _options.SubnetBase, _options.SubnetMask);
 
+            VirtualAddress = address;
             Log.Info($"Registrado. Seu IP virtual é {address}");
+            SetState(NodeConnectionState.Connected, address.ToString());
         }
         else if (index != _assignedIndex)
         {

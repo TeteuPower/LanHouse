@@ -19,6 +19,16 @@ public static class Log
 
     public static LogLevel MinimumLevel { get; set; } = LogLevel.Info;
 
+    /// <summary>
+    /// Escrito também no console. A GUI assina este evento para espelhar o log num painel.
+    /// Só dispara para mensagens que passam pelo <see cref="MinimumLevel"/> — mesma regra do console.
+    /// O handler roda fora do lock do console; um sink que faça UI deve marshalar para a sua thread.
+    /// </summary>
+    public static event Action<LogLevel, string>? MessageLogged;
+
+    /// <summary>Quando false, não escreve no console (a GUI não tem console; evita exceções de I/O).</summary>
+    public static bool WriteToConsole { get; set; } = true;
+
     public static void Trace(string message) => Write(LogLevel.Trace, message);
     public static void Debug(string message) => Write(LogLevel.Debug, message);
     public static void Info(string message) => Write(LogLevel.Info, message);
@@ -40,13 +50,22 @@ public static class Log
             _ => ("ERR", ConsoleColor.Red),
         };
 
-        lock (Gate)
+        if (WriteToConsole)
         {
-            var previous = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            Console.Write($"{DateTime.Now:HH:mm:ss.fff} [{tag}] ");
-            Console.ForegroundColor = previous;
-            Console.WriteLine(message);
+            lock (Gate)
+            {
+                try
+                {
+                    var previous = Console.ForegroundColor;
+                    Console.ForegroundColor = color;
+                    Console.Write($"{DateTime.Now:HH:mm:ss.fff} [{tag}] ");
+                    Console.ForegroundColor = previous;
+                    Console.WriteLine(message);
+                }
+                catch (IOException) { /* sem console anexado (processo GUI) */ }
+            }
         }
+
+        MessageLogged?.Invoke(level, message);
     }
 }
