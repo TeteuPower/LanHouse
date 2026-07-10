@@ -21,9 +21,13 @@ public static class TapInstaller
 {
     public const string DefaultAdapterName = "VirtualLan";
 
-    /// <summary>Instalador oficial e assinado do tap-windows6, publicado pela OpenVPN.</summary>
+    /// <summary>
+    /// Instalador oficial e assinado do tap-windows6, publicado pela OpenVPN. Usado só como
+    /// último recurso: o pacote de distribuição já embute este .exe ao lado do app (ver
+    /// <see cref="FindLocalInstaller"/>), então o caminho normal é offline.
+    /// </summary>
     private const string InstallerUrl =
-        "https://build.openvpn.net/downloads/releases/latest/tap-windows-latest-stable.exe";
+        "https://build.openvpn.net/downloads/releases/tap-windows-9.24.7-I601-Win10.exe";
 
     /// <summary>true se já existe um adaptador compatível com o nome pedido (ou qualquer um, se name for null).</summary>
     public static bool AdapterExists(string? name)

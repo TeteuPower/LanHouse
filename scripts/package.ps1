@@ -62,6 +62,20 @@ $leia = Get-Content "$root\deploy\LEIA-ME.txt" -Raw -Encoding UTF8
 Set-Content -Path (Join-Path $app 'LEIA-ME.txt') -Value $leia -Encoding UTF8
 Copy-Item "$root\docs\TUTORIAL.md" (Join-Path $app 'TUTORIAL.md') -Force
 
+Write-Host '==> Embutindo o driver TAP (pacote 100% offline para o amigo)' -ForegroundColor Cyan
+# O app procura um 'tap-windows*.exe' ao lado do executavel e o usa em vez de baixar. Com isso,
+# quem receber o zip nao precisa de internet para o driver nem de instalar o OpenVPN.
+# Nao vai para o repositorio (GPL-2.0): baixamos aqui, na hora de empacotar (dist e ignorado).
+$driverUrl = 'https://build.openvpn.net/downloads/releases/tap-windows-9.24.7-I601-Win10.exe'
+$driverDst = Join-Path $app 'tap-windows-9.24.7-I601-Win10.exe'
+try {
+    Invoke-WebRequest -Uri $driverUrl -OutFile $driverDst -UseBasicParsing
+    Write-Host "    driver embutido: $([math]::Round((Get-Item $driverDst).Length/1KB,0)) KB"
+}
+catch {
+    Write-Warning "Nao consegui baixar o driver TAP para embutir (o app baixara em runtime): $($_.Exception.Message)"
+}
+
 Write-Host '==> Publicando extras (relay Windows/Linux e CLI)' -ForegroundColor Cyan
 dotnet publish "$root\src\VirtualLan.Relay\VirtualLan.Relay.csproj" -r win-x64   @common -o (Join-Path $extras 'relay-win-x64')
 if ($LASTEXITCODE -ne 0) { throw 'Publish do relay (win) falhou.' }

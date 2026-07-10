@@ -5,10 +5,16 @@ O que é: um "cabo de rede virtual" pela internet. Os dois PCs passam a se
 enxergar como se estivessem na mesma casa, então os jogos em modo LAN
 funcionam normalmente — a sala do host aparece para o outro.
 
-Só existe UM programa: VirtualLan.exe. Ele pede permissão de administrador
-(é preciso para criar o adaptador de rede). Na PRIMEIRA vez que você clicar
-em Conectar, ele instala sozinho o adaptador virtual — aceite quando o
-Windows perguntar. É rápido e só acontece uma vez.
+Só existe UM programa: VirtualLan.exe. Você NÃO precisa instalar o OpenVPN nem
+mais nada — está tudo nesta pasta. Ele pede permissão de administrador (é
+preciso para criar o adaptador de rede). Na PRIMEIRA vez que você clicar em
+Conectar, ele instala sozinho o adaptador virtual (usando o driver que já vem
+junto, o arquivo tap-windows...exe desta pasta) — é só aceitar quando o Windows
+perguntar. É rápido e só acontece uma vez.
+
+Se o Windows mostrar uma tela azul "O Windows protegeu o seu PC", clique em
+"Mais informações" e depois "Executar assim mesmo" (isso aparece porque o
+programa não é assinado; é seguro, foi você/seu amigo que passou).
 
 
 --------------------------------------------------------------------
