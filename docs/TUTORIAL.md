@@ -1,497 +1,227 @@
-# VirtualLan — Tutorial do zero até a sala aparecer
+# VirtualLan — Tutorial
 
-Feito para você e um amigo. Tempo estimado: 30–40 min na primeira vez, ~10 s nas próximas.
+Rede LAN virtual para jogar (ou trocar arquivos) com amigos em outra rede, em outra cidade,
+atrás de outro roteador. O jogo enxerga um adaptador de rede comum, manda o broadcast de
+descoberta de sala, e a sala aparece na lista — como se vocês estivessem na mesma casa.
 
-Ordem: **(0) decidir onde fica o relay → (1) compilar → (2) testar em casa → (3) subir o relay → (4) jogar.**
+**Você só precisa de um programa: `VirtualLan.exe`.** Ele tem interface gráfica, pede
+administrador sozinho e, na primeira vez, instala o adaptador de rede virtual automaticamente.
 
-O passo 2 é o mais importante e quase todo mundo pula. Ele valida 90% do sistema sem você
-gastar um centavo nem mexer em roteador. Se algo estiver errado, você descobre ali — não às
-23h de sexta com seu amigo esperando.
+> Com pressa? Vá direto para o **Início rápido**. Ele resolve o caso mais comum (você hospeda,
+> o amigo entra) em poucos minutos, sem VPS e sem terminal.
 
 ---
 
-## Passo 0 — Onde vai rodar o relay?
+## Início rápido
 
-O relay é um processo minúsculo com um único trabalho: apresentar você e seu amigo um ao outro
-(*rendezvous*) e, se o NAT de vocês for hostil, encaminhar o tráfego. Ele precisa de um **IP
-público alcançável**. Só isso.
+Combinem entre vocês **um nome de rede** e **uma senha** (qualquer coisa, iguais nos dois PCs).
 
-Você tem duas opções, e a escolha depende de uma coisa: **se a sua operadora usa CGNAT.**
+### Quem vai ser o servidor (só um de vocês)
 
-### Descubra se você está atrás de CGNAT (2 minutos)
+1. Abra o **VirtualLan.exe** (aceite o pedido de administrador do Windows).
+2. Marque **“Hospedar o relay neste PC (eu sou o servidor)”**.
+3. Deixe a **porta** em `7777`.
+4. Preencha **Nome da rede** e **Senha**.
+5. Clique **Conectar**.
+   - Na primeira vez, ele instala o adaptador virtual — aceite o aviso do Windows. Leva alguns
+     segundos e só acontece uma vez.
+6. Aparece o campo **“Envie ao amigo: SEU_IP:7777”**. Clique **Copiar** e mande esse endereço
+   para o amigo, junto com o nome da rede e a senha.
 
-CGNAT é quando a operadora te dá um IP privado e compartilha um IP público entre centenas de
-clientes. Se for o seu caso, **abrir porta no roteador não funciona** — não há porta para abrir.
+### Quem vai entrar (o amigo)
 
-```powershell
-# 1) Qual IP o mundo enxerga?
-(Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing).Content
+1. Abra o **VirtualLan.exe**.
+2. **Não** marque a opção de servidor.
+3. Em **“Servidor do amigo (host:porta)”**, cole o endereço que o host mandou
+   (ex.: `200.100.50.10:7777`).
+4. Digite o **mesmo** nome de rede e a **mesma** senha.
+5. Clique **Conectar**.
+
+### Jogar
+
+Quando os dois aparecerem como **Conectado** (bolinha verde), abram o jogo e escolham
+**LAN / Rede local / Multiplayer local**. O host cria a sala; ela aparece para o amigo em
+alguns segundos.
+
+Pronto. É isso. O resto deste documento é só para quando algo não funciona ou para usos
+avançados.
+
+---
+
+## O que a janela mostra
+
+- **Barra de status** (embaixo): a bolinha fica cinza (desconectado), laranja (conectando) ou
+  verde (conectado — mostra o seu IP virtual, algo como `25.0.0.1`).
+- **Participantes**: cada amigo conectado, com o IP virtual, o MAC e o estado do caminho:
+  - **Direto** = tráfego ponto-a-ponto (P2P), latência mínima. É o normal depois de 1–2 s.
+  - **Via relay** = passando pelo servidor. Funciona, só com um pouco mais de latência.
+  - **Conectando** = tentando abrir o caminho direto.
+- **Registro**: o log do que está acontecendo. Marque **“Log detalhado”** se precisar diagnosticar.
+
+---
+
+## Trocar arquivos (não só jogos)
+
+A rede virtual é uma LAN de verdade. Para acessar as pastas compartilhadas do outro PC, abra o
+**Explorador de Arquivos** e digite o IP virtual dele:
+
+```
+\\25.0.0.2
 ```
 
-Anote. Agora entre no painel do seu roteador (geralmente `http://192.168.0.1` ou
-`http://192.168.1.1`) e procure **"IP WAN"**, "Status da Internet" ou "Endereço IP externo".
+O IP de cada participante aparece na lista **Participantes**. Isso vale para qualquer coisa que
+funcione em LAN: servidores de mídia, impressoras, ferramentas de dev, etc.
 
-| Situação | Diagnóstico |
+> ⚠️ Entrar numa rede virtual expõe à `25.0.0.0/24` os serviços que a sua máquina já expõe à LAN
+> (compartilhamentos, etc.). Entre apenas em redes de gente em quem você confia. Veja
+> [`SECURITY.md`](SECURITY.md).
+
+---
+
+## Sobre “ser o servidor”
+
+Alguém precisa ter um endereço público onde o outro se conecta. No modo **servidor**, o próprio
+VirtualLan faz esse papel a partir do seu PC:
+
+- sobe o servidor de encontro (**relay**) dentro do app;
+- abre a porta no **Firewall do Windows** automaticamente;
+- tenta abrir a porta no seu **roteador via UPnP** (sem você mexer em nada);
+- descobre o seu **IP público** e mostra o endereço pronto para compartilhar.
+
+Se o UPnP funcionar (a maioria dos roteadores domésticos), não há mais nada a fazer. Se o log
+mostrar um aviso de UPnP, faça **uma vez** o encaminhamento de porta no roteador:
+
+| Campo | Valor |
 |---|---|
-| O IP WAN do roteador é **igual** ao que o ipify mostrou | Sem CGNAT. Port forward funciona. |
-| O IP WAN é **diferente** do ipify | Você está atrás de CGNAT. |
-| O IP WAN começa com `100.64.` a `100.127.` | CGNAT, definitivamente. |
-| O IP WAN começa com `10.`, `192.168.` ou `172.16–31.` | CGNAT (ou modem em modo roteador duplo). |
-
-> No Brasil, CGNAT é a regra em planos residenciais de fibra e praticamente universal em
-> 4G/5G. Se você não tem IP fixo contratado, assuma que está atrás de CGNAT até provar o
-> contrário.
-
-### Escolha
-
-**Se você NÃO está atrás de CGNAT** → pode rodar o relay no seu próprio PC. Grátis, mas seu PC
-precisa estar ligado e você precisa abrir a porta no roteador. Vá para o **Passo 3-B**.
-
-**Se você ESTÁ atrás de CGNAT** (ou não quer depender do seu PC) → precisa de um VPS. Vá para
-o **Passo 3-A**. Não é caro:
-
-| Provedor | Custo | Observação |
-|---|---|---|
-| **Oracle Cloud Always Free** | R$ 0 | 4 vCPU ARM + 24 GB RAM, para sempre. Cadastro exige cartão (não cobra). Use `-r linux-arm64` no build. |
-| **Hetzner CX22** | ~€ 4/mês | Alemanha. Latência ~200 ms para o Brasil — ruim para jogo de reflexo. |
-| **Contabo / Hostinger / Vultr** (SP ou Miami) | R$ 20–35/mês | São Paulo é o ideal: ~10–30 ms. |
-
-> **Latência importa pouco na maior parte do tempo.** Assim que o hole punching funciona (1–2 s
-> após conectar), o tráfego vira P2P direto e o relay some do caminho. A latência do VPS só
-> pesa se vocês *ficarem* presos no fallback. Ainda assim, prefira um VPS no Brasil.
-
-**Se você não sabe / quer testar antes de gastar** → faça o **Passo 2** primeiro. Ele funciona
-sem VPS nenhum.
-
----
-
-## Passo 1 — Compilar (uma vez, na sua máquina)
-
-Você já tem o .NET SDK. Confirme que é a versão 8 ou superior:
-
-```powershell
-dotnet --version    # precisa ser 8.x ou 9.x
-```
-
-No PowerShell, dentro de `C:\Trabalho\lanhouse`:
-
-```powershell
-# Roda os 35 testes e publica o cliente Windows como .exe único
-.\scripts\build.ps1
-```
-
-Resultado: `dist\win-x64\vlan.exe` — um executável autocontido, ~15 MB, sem dependência de
-runtime. É esse arquivo que você manda para o seu amigo.
-
-Para gerar também o binário do relay (Linux):
-
-```powershell
-.\scripts\build.ps1 -Relay          # gera dist\linux-x64\vlan-relay
-```
-
-> **Oracle Cloud (ARM):** o `build.ps1 -Relay` publica para `linux-x64`. Se o seu VPS for ARM
-> (o free tier da Oracle é), use:
-> ```powershell
-> dotnet publish .\src\VirtualLan.Relay\VirtualLan.Relay.csproj -c Release `
->     -r linux-arm64 --self-contained true -p:PublishSingleFile=true -o .\dist\linux-arm64
-> ```
-
-Se você vai rodar o relay no Windows (Passo 3-B), não precisa publicar nada extra —
-`dotnet run` serve.
-
----
-
-## Passo 2 — Testar em casa, sem VPS e sem roteador
-
-Aqui você prova que o driver TAP, a criptografia, o switch virtual e o jogo funcionam.
-**Faça isto antes de qualquer outra coisa.** Precisa de dois PCs na mesma rede Wi-Fi/cabo.
-
-Chame-os de **PC-A** (que também vai rodar o relay de teste) e **PC-B**.
-
-### 2.1 — Instale o adaptador TAP nos dois PCs
-
-Em cada máquina, abra o **PowerShell como Administrador** e rode:
-
-```powershell
-cd C:\Trabalho\lanhouse
-.\scripts\install-tap.ps1
-```
-
-O script baixa o driver `tap-windows6` (assinado pela OpenVPN — não escrevemos driver próprio,
-isso exigiria certificado EV e atestação da Microsoft) e cria um adaptador chamado `VirtualLan`.
-
-O Windows vai pedir confirmação para instalar o driver. Aceite.
-
-Confirme:
-
-```powershell
-.\dist\win-x64\vlan.exe --list-adapters
-# 1 adaptador(es) TAP:
-#   VirtualLan (tap0901, {A1B2C3D4-...})
-```
-
-### 2.2 — Suba o relay no PC-A
-
-Descubra o IP local do PC-A:
-
-```powershell
-ipconfig | Select-String IPv4      # ex.: 192.168.0.15
-```
-
-Rode o relay (janela separada, deixe aberta):
-
-```powershell
-cd C:\Trabalho\lanhouse
-dotnet run --project src\VirtualLan.Relay -- --port 7777 -v
-# 21:04:02.110 [INF] Relay ouvindo em 0.0.0.0:7777/udp
-```
-
-Libere a porta no Firewall do Windows do PC-A (**PowerShell como Admin**):
-
-```powershell
-netsh advfirewall firewall add rule name="VirtualLan Relay" dir=in action=allow protocol=UDP localport=7777
-```
-
-### 2.3 — Conecte os dois PCs
-
-**PC-A** (nova janela, PowerShell **como Administrador**):
-
-```powershell
-cd C:\Trabalho\lanhouse
-.\dist\win-x64\vlan.exe --relay 192.168.0.15:7777 --network teste --password "cavalo bateria grampo correto"
-```
-
-**PC-B** (PowerShell **como Administrador**) — mesmo `--network`, mesma `--password`, apontando
-para o IP do PC-A:
-
-```powershell
-.\vlan.exe --relay 192.168.0.15:7777 --network teste --password "cavalo bateria grampo correto"
-```
-
-### 2.4 — O que você deve ver
-
-No PC-A:
-
-```
-21:04:11.220 [INF] Rede 'teste' → networkId 3f9a1c
-21:04:11.221 [INF] Node 8c21f0a4 (efêmero)
-21:04:11.244 [INF] TAP aberto: VirtualLan mac=00:ff:1a:2b:3c:4d driver=9.24
-21:04:11.310 [INF] Configurando 'VirtualLan' → 25.0.0.1/24 mtu=1400
-21:04:11.988 [INF] Registrado. Seu IP virtual é 25.0.0.1
-21:04:23.101 [INF] Peer entrou: 25.0.0.2 [00:ff:aa:bb:cc:dd] 4e19b7c2
-21:04:23.605 [INF] Caminho direto estabelecido com 25.0.0.2 via 192.168.0.22:51820
-```
-
-**Três coisas para conferir, nesta ordem:**
-
-1. **`networkId` é idêntico nos dois PCs.** Se for diferente, o nome ou a senha não batem
-   (a senha diferencia maiúsculas; o nome não). Nada mais vai funcionar até isso bater.
-2. **`Peer entrou`** apareceu nos dois lados. Se não, o PC-B não alcança o relay — é firewall
-   no PC-A ou IP errado.
-3. **`Caminho direto estabelecido`.** Na mesma LAN isso é quase instantâneo, porque o
-   VirtualLan tenta o endereço local antes do público (muito roteador doméstico não faz
-   *hairpin NAT*, então o caminho local é o único confiável ali).
-
-### 2.5 — Prove que a Camada 2 está viva
-
-Do PC-A:
-
-```powershell
-ping 25.0.0.2
-arp -a 25.0.0.2      # o MAC precisa aparecer: prova que ARP (broadcast!) atravessou o túnel
-```
-
-Se o `arp -a` mostra o MAC do PC-B, o switch virtual está funcionando. **É esse broadcast que
-faz a sala do jogo aparecer.** Um túnel IP comum passaria no `ping` e falharia aqui.
-
-### 2.6 — Abra o jogo
-
-Nos dois PCs, abra o jogo e escolha **LAN / Rede local / Multiplayer local**.
-
-- No **host**: crie a partida.
-- No **cliente**: a sala aparece na lista em 1–5 segundos.
-
-Se o `ping` funciona mas a sala não aparece, é firewall. Veja *Problemas comuns* no fim.
-
-**Funcionou? Ótimo — o sistema está provado.** Agora é só trocar o relay local por um relay
-com IP público, e vocês podem estar em cidades diferentes.
-
----
-
-## Passo 3-A — Relay em um VPS (recomendado)
-
-### Suba o binário
-
-```powershell
-# do seu Windows
-scp .\dist\linux-x64\vlan-relay usuario@meu-vps.exemplo.com:~
-```
-
-### Instale como serviço
-
-No VPS, via SSH:
-
-```bash
-# usuário sem privilégio: o relay não precisa de nenhum
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin vlan
-sudo install -m 0755 ~/vlan-relay /usr/local/bin/vlan-relay
-
-# unit já vem pronta no repositório, em deploy/vlan-relay.service
-sudo curl -o /etc/systemd/system/vlan-relay.service \
-  file:///caminho/para/deploy/vlan-relay.service     # ou simplesmente copie o arquivo
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now vlan-relay
-sudo systemctl status vlan-relay        # deve dizer "active (running)"
-```
-
-### Abra a porta — nos DOIS lugares
-
-Esta é a pegadinha que mais trava gente em VPS de nuvem: existem **dois** firewalls.
-
-```bash
-# 1) firewall do sistema operacional
-sudo ufw allow 7777/udp
-```
-
-```
-# 2) firewall da nuvem (o que mais esquecem)
-   AWS            → Security Group: Inbound rule, UDP 7777, source 0.0.0.0/0
-   Oracle Cloud   → VCN → Security List: Ingress, UDP, porta 7777
-   Google Cloud   → VPC → Firewall rules: allow udp:7777
-   Azure          → NSG: Inbound, UDP 7777
-   Hetzner/Vultr/DigitalOcean → em geral já vem aberto; confira o painel
-```
-
-> A Oracle Cloud, além da Security List, vem com `iptables` pré-configurado bloqueando tudo.
-> Se `systemctl status` diz *running* e mesmo assim ninguém conecta, rode:
-> `sudo iptables -I INPUT -p udp --dport 7777 -j ACCEPT` e persista com `netfilter-persistent save`.
-
-### Verifique de fora
-
-Do seu Windows:
-
-```powershell
-# Se o relay estiver vivo, ele responde com um pacote de Error (versão de protocolo inválida).
-# Silêncio total = porta fechada em algum dos dois firewalls.
-$c = New-Object System.Net.Sockets.UdpClient
-$c.Client.ReceiveTimeout = 3000
-$c.Connect("meu-vps.exemplo.com", 7777)
-$c.Send([byte[]](0x56,0x4C,0x41,0x4E,99,1,0,0), 8) | Out-Null
-try {
-    $ep = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
-    $r = $c.Receive([ref]$ep)
-    "OK — relay respondeu $($r.Length) bytes"
-} catch { "SEM RESPOSTA — verifique ufw E o firewall da nuvem" }
-$c.Close()
-```
-
-Pule para o **Passo 4**.
-
----
-
-## Passo 3-B — Relay no seu próprio PC (só sem CGNAT)
-
-Só faça isto se o teste do Passo 0 confirmou que você **não** está atrás de CGNAT.
-
-1. **Dê um IP fixo ao seu PC na LAN.** No roteador, em *DHCP → Reserva de endereço*, fixe o
-   IP do seu PC (ex.: `192.168.0.15`). Se o IP mudar, o port forward quebra silenciosamente.
-
-2. **Encaminhe a porta.** No roteador, em *Port Forwarding / Encaminhamento de portas / Virtual
-   Server*:
-
-   | Campo | Valor |
-   |---|---|
-   | Protocolo | **UDP** (não TCP) |
-   | Porta externa | 7777 |
-   | IP interno | 192.168.0.15 |
-   | Porta interna | 7777 |
-
-3. **Libere no Firewall do Windows** (PowerShell como Admin):
-
-   ```powershell
-   netsh advfirewall firewall add rule name="VirtualLan Relay" dir=in action=allow protocol=UDP localport=7777
-   ```
-
-4. **Rode o relay** e deixe rodando:
-
-   ```powershell
-   dotnet run --project src\VirtualLan.Relay -c Release -- --port 7777
-   ```
-
-   Se preferir um `.exe` solto (para colocar na inicialização do Windows):
-
-   ```powershell
-   dotnet publish .\src\VirtualLan.Relay\VirtualLan.Relay.csproj -c Release `
-       -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\dist\relay-win-x64
-   ```
-
-5. **Seu endereço de relay** é o seu IP público: `(Invoke-WebRequest "https://api.ipify.org" -UseBasicParsing).Content`
-
-> **Limitação real:** IP residencial muda. Se cair a luz ou o modem reiniciar, o endereço muda
-> e vocês precisam reconectar com o IP novo. Um DDNS gratuito (DuckDNS, No-IP) resolve: você
-> passa a usar `seunome.duckdns.org:7777` como `--relay`.
-
----
-
-## Passo 4 — Jogar de verdade
-
-### O que mandar para o seu amigo
-
-Três coisas:
-
-1. O arquivo `vlan.exe` (de `dist\win-x64\`).
-2. O script `scripts\install-tap.ps1`.
-3. O comando pronto — **exceto a senha**, que você manda por outro canal.
-
-### Do lado do seu amigo (uma vez)
-
-```powershell
-# PowerShell como Administrador
-.\install-tap.ps1
-```
-
-### Toda vez que forem jogar
-
-**Os dois** rodam, em PowerShell **como Administrador**, com `--network` e `--password`
-idênticos:
-
-```powershell
-.\vlan.exe --relay meu-vps.exemplo.com:7777 --network dota-sexta --password "cavalo bateria grampo correto"
-```
-
-Deixe a janela aberta. Abram o jogo, escolham **LAN**. O host cria a sala; ela aparece para o
-cliente.
-
-`Ctrl+C` sai limpo: avisa o relay e remove a regra de firewall que o cliente criou.
-
-### Sobre a senha
-
-É o **único** fator de autenticação. Quem souber `(nome, senha)` entra na rede e enxerga o
-tráfego de todo mundo dentro dela. Use uma frase longa e aleatória — quatro ou cinco palavras
-sem relação entre si. Não use `123456` "porque é só um jogo": a rede virtual é uma LAN de
-verdade, e entrar nela expõe os compartilhamentos SMB e servidores locais da sua máquina aos
-outros membros.
-
-Detalhes honestos do modelo de segurança em [`SECURITY.md`](SECURITY.md).
-
----
-
-## Referência rápida de comandos
-
-```
-vlan --relay <host:porta> --network <nome> --password <senha> [opções]
-
-  --adapter, -a <nome>   Escolhe o adaptador TAP (se houver mais de um).
-  --port <n>             Porta UDP local. Padrão: efêmera.
-  --list-adapters        Lista os adaptadores TAP e sai.
-  --verbose, -v          Log de depuração — use quando algo não funcionar.
-  --trace                Log de trace (muito verboso).
-```
-
-A cada 30 s o cliente imprime um resumo:
-
-```
-21:09:41.002 [INF] — 1 peer(s), tx=48213 rx=51907 macs=1
-21:09:41.002 [INF]    25.0.0.2  00:ff:aa:bb:cc:dd  4e19b7c2  direto 189.4.13.88:51820
-```
-
-`direto` = P2P, latência mínima. `via relay` = passando pelo VPS.
+| Protocolo | **UDP** (não TCP) |
+| Porta externa | 7777 |
+| IP interno | o IP deste PC na sua rede (ex.: 192.168.0.15) |
+| Porta interna | 7777 |
+
+> Dica: para o endereço não mudar quando o modem reiniciar, reserve o IP deste PC no DHCP do
+> roteador e/ou use um DDNS grátis (DuckDNS, No-IP) como endereço no lugar do IP.
+
+O relay é leve: assim que o caminho direto (P2P) é estabelecido, o tráfego do jogo nem passa por
+ele. Deixe a janela do host aberta enquanto jogam.
 
 ---
 
 ## Problemas comuns
 
-### "O ping funciona, mas a sala não aparece no jogo"
+### “Conectado” dos dois lados, mas a sala não aparece no jogo
 
-É firewall. Praticamente sempre.
+Quase sempre é **firewall/antivírus** bloqueando o jogo (não o VirtualLan). O app já marca a
+rede virtual como **Privada**, mas alguns antivírus (Kaspersky, ESET, Avast) revertem isso.
 
-O cliente já tenta marcar o adaptador como rede **Privada**, mas alguns antivírus (Kaspersky,
-ESET, Avast) revertem isso. Confirme:
+1. Confirme o perfil da rede:
+   ```powershell
+   Get-NetConnectionProfile -InterfaceAlias VirtualLan
+   # NetworkCategory precisa ser Private
+   ```
+   Se estiver `Public`:
+   ```powershell
+   Set-NetConnectionProfile -InterfaceAlias VirtualLan -NetworkCategory Private
+   ```
+2. Garanta que o **jogo** tem regra de entrada no Firewall:
+   ```powershell
+   netsh advfirewall firewall add rule name="Meu Jogo" dir=in action=allow program="C:\Caminho\jogo.exe" enable=yes
+   ```
 
-```powershell
-Get-NetConnectionProfile -InterfaceAlias VirtualLan
-# NetworkCategory precisa ser: Private
+### O amigo nunca aparece em “Participantes”
+
+Vocês não estão na mesma rede virtual, ou ele não alcança o seu servidor.
+
+- Confiram o **nome da rede** e a **senha** — precisam ser idênticos (a senha diferencia
+  maiúsculas de minúsculas; o nome não).
+- No host, veja se o log diz que a porta foi liberada. Se o UPnP falhou, faça o encaminhamento
+  de porta UDP 7777 (seção “Sobre ser o servidor”).
+- Teste rápido do endereço: peça para o amigo abrir o navegador em `http://SEU_IP:7777` — não vai
+  “carregar” nada (é UDP), mas serve para você confirmar que ele digitou o IP certo.
+
+### Fica sempre “Via relay”, nunca “Direto”
+
+Os dois lados estão atrás de **NAT simétrico** (comum em 4G/5G e em algumas operadoras de fibra).
+O caminho direto por hole punching não é possível nesse cenário. **Funciona mesmo assim**, só com
+a latência do servidor somada. Se um dos lados trocar de rede (ex.: sair do 4G para o Wi-Fi), o
+caminho direto costuma se estabelecer sozinho.
+
+### “Execute como Administrador”
+
+O `VirtualLan.exe` já pede elevação ao abrir. Se você desabilitou o UAC ou iniciou de um jeito
+que pulou o pedido, feche e abra de novo clicando com o botão direito → **Executar como
+administrador**.
+
+### Há mais de um adaptador TAP (ex.: você usa OpenVPN)
+
+Se outro programa (OpenVPN, outro emulador de LAN) já usa um adaptador TAP, escolha o do
+VirtualLan no campo **Adaptador** da janela. O adaptador criado pelo VirtualLan se chama
+`VirtualLan`.
+
+---
+
+## Avançado — relay dedicado num VPS (opcional)
+
+O modo servidor da GUI resolve o caso normal. Você só precisa de um VPS se:
+
+- quiser um servidor **sempre ligado**, independente do seu PC; **ou**
+- os **dois** lados estiverem atrás de CGNAT (comum em 4G/5G e planos de fibra sem IP público),
+  caso em que nenhum dos dois consegue receber conexão de entrada em casa.
+
+O relay é um binário minúsculo, sem estado, que roda em qualquer VPS Linux (ou Windows). Ele já
+vem publicado em `extras/` dentro do pacote:
+
+- `extras/relay-linux-x64/vlan-relay` — para VPS Linux
+- `extras/relay-win-x64/vlan-relay.exe` — para um PC/Servidor Windows
+
+### Subir no Linux
+
+```bash
+sudo install -m 0755 vlan-relay /usr/local/bin/vlan-relay
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin vlan
+# unit systemd pronta no repositório:
+sudo cp deploy/vlan-relay.service /etc/systemd/system/
+sudo systemctl enable --now vlan-relay
+sudo ufw allow 7777/udp
 ```
 
-Se estiver `Public`, force:
+> Firewall da nuvem: além do `ufw`, libere UDP 7777 no painel do provedor (Security Group na AWS,
+> Security List na Oracle, Firewall rules no GCP, NSG no Azure). É o que mais trava gente.
+
+Depois, na GUI, **os dois** deixam a opção de servidor **desmarcada** e usam
+`SEU_VPS:7777` no campo do servidor.
+
+### Oracle Cloud (ARM, grátis)
+
+O free tier da Oracle é ARM. Publique para ARM:
 
 ```powershell
-Set-NetConnectionProfile -InterfaceAlias VirtualLan -NetworkCategory Private
+dotnet publish .\src\VirtualLan.Relay\VirtualLan.Relay.csproj -c Release `
+    -r linux-arm64 --self-contained true -p:PublishSingleFile=true -o .\dist\relay-linux-arm64
 ```
 
-Depois, garanta que o **jogo** tem regra de entrada:
+---
 
-```powershell
-netsh advfirewall firewall add rule name="Warcraft III" dir=in action=allow `
-    program="C:\Program Files\Warcraft III\war3.exe" enable=yes
+## Linha de comando (opcional)
+
+Quem preferir terminal pode usar o cliente `vlan.exe` (em `extras/cli-win-x64`), com os mesmos
+conceitos:
+
 ```
+vlan --relay <host:porta> --network <nome> --password <senha> [opções]
 
-### "Nem o ping funciona"
-
-Rode com `-v` nos dois lados e procure a linha `Peer entrou`.
-
-- **Não aparece `Peer entrou`** → vocês não estão na mesma rede virtual. Compare o `networkId`
-  impresso no início nos dois PCs. Se for diferente: nome ou senha divergentes.
-- **Aparece `Peer entrou` mas nada trafega** → o relay está recebendo mas não entregando.
-  Verifique se o VPS não tem rate-limit de UDP.
-
-### "Sempre fica `via relay`, nunca vira `direto`"
-
-Os dois lados estão atrás de **NAT simétrico** — comum em 4G/5G e em algumas operadoras de
-fibra. O hole punching UDP é impossível nesse cenário sem *port prediction*, que é frágil.
-
-Funciona assim mesmo, só com a latência do VPS somada. Mitigação: um VPS geograficamente
-próximo aos dois. Se um dos lados sair do NAT simétrico (ex.: sair do 4G para o Wi-Fi de
-casa), o caminho direto se estabelece sozinho em ~1 s.
-
-### `Falha ao abrir \\.\Global\{...}.tap (execute como Administrador)`
-
-É literalmente isso. O `app.manifest` pede elevação via UAC, mas se você chamou o `.exe` de um
-terminal já aberto sem elevação, o prompt não aparece. Abra o PowerShell com
-*Executar como administrador*.
-
-### `outro processo já está usando este adaptador`
-
-O OpenVPN (ou outro cliente VPN) está segurando o mesmo adaptador TAP. Crie um segundo:
-
-```powershell
-.\scripts\install-tap.ps1 -AdapterName VirtualLan2
-.\vlan.exe --adapter VirtualLan2 --relay ... --network ... --password ...
+  --adapter, -a <nome>   Adaptador TAP, se houver mais de um.
+  --list-adapters        Lista os adaptadores e sai.
+  --install-tap          Instala o driver/adaptador TAP e sai (sem PowerShell).
+  --verbose, -v          Log de depuração.
 ```
-
-### `Há 2 adaptadores TAP. Escolha um com --adapter`
-
-Exatamente o que diz. Rode `--list-adapters` e passe o nome.
-
-### Jogo antigo trava, ou lista a sala e não conecta
-
-Alguns títulos de ~2002 lidam mal com MTU abaixo de 1500 em quadros grandes. O padrão é 1400
-por segurança (cobre PPPoE, comum em fibra residencial no Brasil). Se o seu link não é PPPoE,
-edite `NetworkConfigurator.Mtu` para `1460` e recompile.
-
-### A mesma sala aparece duas vezes na lista
-
-Não deveria acontecer — o cliente evita duplicar quadros de broadcast quando parte dos peers
-está direto e parte via relay. Se acontecer, é bug: rode com `--trace` e guarde o log.
 
 ---
 
 ## Desinstalar
 
-```powershell
-# PowerShell como Administrador
-.\scripts\uninstall-tap.ps1
-```
+- Para de usar: feche o VirtualLan. Ele remove a regra de firewall e sai da rede limpo.
+- Para remover o adaptador virtual e o driver: **Adicionar ou Remover Programas → TAP-Windows**
+  (só remova se você não usa OpenVPN, que compartilha o mesmo driver). Alternativamente, o
+  script `scripts\uninstall-tap.ps1` remove o adaptador `VirtualLan`.
 
-Remove o adaptador `VirtualLan` e a regra de firewall. **Não** remove o driver
-`tap-windows6` — ele pode estar em uso pelo OpenVPN. Para removê-lo de vez:
-*Adicionar ou Remover Programas → TAP-Windows*.
-
-No VPS:
-
-```bash
-sudo systemctl disable --now vlan-relay
-sudo rm /etc/systemd/system/vlan-relay.service /usr/local/bin/vlan-relay
-sudo userdel vlan
-```
+Detalhes honestos do modelo de segurança em [`SECURITY.md`](SECURITY.md).

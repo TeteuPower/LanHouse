@@ -1,0 +1,66 @@
+VirtualLan — jogar em LAN com quem está em outra rede
+=====================================================
+
+O que é: um "cabo de rede virtual" pela internet. Os dois PCs passam a se
+enxergar como se estivessem na mesma casa, então os jogos em modo LAN
+funcionam normalmente — a sala do host aparece para o outro.
+
+Só existe UM programa: VirtualLan.exe. Ele pede permissão de administrador
+(é preciso para criar o adaptador de rede). Na PRIMEIRA vez que você clicar
+em Conectar, ele instala sozinho o adaptador virtual — aceite quando o
+Windows perguntar. É rápido e só acontece uma vez.
+
+
+--------------------------------------------------------------------
+QUEM VAI SER O SERVIDOR  (basta um de vocês)
+--------------------------------------------------------------------
+1. Abra o VirtualLan.exe.
+2. Marque a caixa "Hospedar o relay neste PC (eu sou o servidor)".
+3. Deixe a porta em 7777.
+4. Escolha um Nome da rede e uma Senha (combine com o amigo).
+5. Clique em Conectar.
+6. Vai aparecer "Envie ao amigo: SEU_IP:7777". Clique em Copiar e mande esse
+   endereço para o seu amigo (WhatsApp, Discord...), junto com o Nome da rede
+   e a Senha.
+
+   Observação: se aparecer um aviso de UPnP no registro, seu roteador não
+   abriu a porta sozinho. Nesse caso, entre no roteador e encaminhe a porta
+   UDP 7777 para este PC (uma vez só). A maioria dos roteadores já faz isso
+   automaticamente e você não precisa fazer nada.
+
+
+--------------------------------------------------------------------
+QUEM VAI ENTRAR  (o amigo)
+--------------------------------------------------------------------
+1. Abra o VirtualLan.exe.
+2. NÃO marque a opção de servidor.
+3. No campo "Servidor do amigo", cole o endereço que o host enviou
+   (por exemplo 200.100.50.10:7777).
+4. Digite o MESMO Nome da rede e a MESMA Senha do host.
+5. Clique em Conectar.
+
+
+--------------------------------------------------------------------
+JOGAR
+--------------------------------------------------------------------
+Quando os dois aparecerem como "Conectado", abram o jogo e escolham
+LAN / Rede local / Multiplayer local. O host cria a sala; ela aparece para
+o amigo em alguns segundos.
+
+Dá para usar para mais do que jogos: para trocar arquivos, abra o Explorador
+de Arquivos e digite  \\25.0.0.1  (o IP virtual de cada participante aparece
+na lista "Participantes" da janela).
+
+
+--------------------------------------------------------------------
+SE NÃO FUNCIONAR
+--------------------------------------------------------------------
+- Confira que os dois usaram EXATAMENTE o mesmo Nome da rede e a mesma Senha
+  (a senha diferencia maiúsculas e minúsculas).
+- A sala não aparece mas dá para "pingar" o outro? Quase sempre é o
+  Firewall/antivírus bloqueando o jogo. O VirtualLan já marca a rede como
+  Privada; confirme que o jogo tem permissão de ENTRADA no Firewall do Windows.
+- Marque "Log detalhado" na janela para ver o que está acontecendo.
+- Passo a passo completo e solução de problemas: veja o arquivo TUTORIAL.md.
+
+Bom jogo!

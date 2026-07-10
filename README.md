@@ -33,69 +33,58 @@ com ARP e broadcast, exatamente como um switch físico faria.
 
 Detalhes em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## Início rápido (com interface)
+
+O produto final é **um** aplicativo com interface gráfica: `VirtualLan.exe`. Ele pede
+administrador sozinho e, na primeira vez, instala o adaptador virtual automaticamente.
+
+1. **Um de vocês** abre o app, marca **“Hospedar o relay neste PC (eu sou o servidor)”**,
+   escolhe um nome de rede e uma senha, e clica **Conectar**. O app abre a porta no firewall,
+   tenta o UPnP no roteador e mostra o **endereço para enviar ao amigo**.
+2. **O amigo** abre o app, cola esse endereço em “Servidor do amigo”, digita o mesmo nome de
+   rede e a mesma senha, e clica **Conectar**.
+3. Abram o jogo em modo **LAN**. A sala do host aparece para o amigo.
+
+Passo a passo completo (e solução de problemas) em [`docs/TUTORIAL.md`](docs/TUTORIAL.md).
+
 ## Componentes
 
 | Binário | Onde roda | O quê |
 |---|---|---|
-| `vlan.exe` | Windows, como Admin | Cliente. Adaptador TAP + NAT traversal + encaminhamento L2. |
-| `vlan-relay` | Qualquer VPS (Linux) | Rendezvous para o hole punching e fallback quando o NAT é hostil. |
+| `VirtualLan.exe` | Windows | **A interface.** Cliente + (opcional) relay embutido. É o que você compartilha. |
+| `vlan.exe` | Windows, como Admin | Mesma função, em linha de comando (uso avançado/diagnóstico). |
+| `vlan-relay` | Windows ou VPS Linux | Relay dedicado, para um servidor sempre ligado (opcional). |
 
 Um relay bem pequeno serve: ele só encaminha tráfego enquanto os peers não conseguem falar
 direto. Na maioria dos casos, após 1–2 segundos o tráfego passa a ser P2P e o relay fica ocioso.
 
-## Instalação
-
-> Primeira vez? Siga o [**tutorial passo a passo**](docs/TUTORIAL.md) — ele inclui um teste
-> local que valida tudo sem VPS e sem mexer no roteador.
-
-### 1. Servidor (uma vez)
-
-Em qualquer VPS com IP público — o mais barato serve.
-
-```bash
-# na sua máquina de dev (Windows):
-.\scripts\build.ps1 -Relay
-
-# copie dist/linux-x64/vlan-relay para o VPS, então:
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin vlan
-sudo install -m 0755 vlan-relay /usr/local/bin/vlan-relay
-sudo cp deploy/vlan-relay.service /etc/systemd/system/
-sudo systemctl enable --now vlan-relay
-sudo ufw allow 7777/udp
-```
-
-### 2. Cada PC que vai jogar
+## Empacotar para compartilhar
 
 ```powershell
-# PowerShell como Administrador
-.\scripts\install-tap.ps1
+.\scripts\package.ps1
 ```
 
-O script instala o driver `tap-windows6` (assinado pela OpenVPN — não escrevemos driver próprio,
-isso exigiria certificado EV e atestação da Microsoft) e cria o adaptador `VirtualLan`.
+Gera `dist\VirtualLan\` (com `VirtualLan.exe` autocontido, `LEIA-ME.txt` e o tutorial) e um
+`dist\VirtualLan.zip` pronto para mandar ao amigo — ele extrai e abre, sem instalar o .NET. Os
+binários avançados (relay dedicado Windows/Linux e o cliente CLI) ficam em `dist\extras\`.
 
-### 3. Entrar na rede
+## Instalação
 
-Nos **dois** PCs, com **exatamente** o mesmo `--network` e `--password`:
+Para o uso normal, **não há instalação manual**: abra o `VirtualLan.exe` e clique Conectar. Na
+primeira vez ele instala o driver `tap-windows6` (assinado pela OpenVPN — não escrevemos driver
+próprio, isso exigiria certificado EV e atestação da Microsoft) e cria o adaptador `VirtualLan`.
+
+O passo a passo, incluindo o modo servidor e a solução de problemas, está em
+[`docs/TUTORIAL.md`](docs/TUTORIAL.md).
+
+## Uso avançado (linha de comando)
+
+Quem preferir terminal pode usar o cliente `vlan.exe` (em `dist\extras\cli-win-x64`), como
+Administrador, com o mesmo nome de rede e senha nos dois lados:
 
 ```powershell
 vlan.exe --relay meu-vps.exemplo.com:7777 --network dota-sexta --password "cavalo bateria grampo correto"
 ```
-
-Saída esperada:
-
-```
-21:04:11.220 [INF] Rede 'dota-sexta' → networkId 3f9a1c
-21:04:11.244 [INF] TAP aberto: VirtualLan mac=00:ff:1a:2b:3c:4d driver=9.24
-21:04:11.310 [INF] Configurando 'VirtualLan' → 25.0.0.1/24 mtu=1400
-21:04:11.988 [INF] Registrado. Seu IP virtual é 25.0.0.1
-21:04:23.101 [INF] Peer entrou: 25.0.0.2 [00:ff:aa:bb:cc:dd] 8c21f0a4
-21:04:24.115 [INF] Caminho direto estabelecido com 25.0.0.2 via 189.4.x.x:51820
-```
-
-Agora abram o jogo e escolham **LAN / Rede local**. A sala do host aparece na lista do cliente.
-
-## Uso
 
 ```
 vlan --relay <host:porta> --network <nome> --password <senha> [opções]
@@ -103,6 +92,7 @@ vlan --relay <host:porta> --network <nome> --password <senha> [opções]
   --adapter, -a <nome>   Adaptador TAP, se houver mais de um.
   --port <n>             Porta UDP local (padrão: efêmera).
   --list-adapters        Lista os adaptadores TAP e sai.
+  --install-tap          Instala o driver/adaptador TAP e sai (sem PowerShell).
   --verbose, -v          Log de depuração.
 ```
 
