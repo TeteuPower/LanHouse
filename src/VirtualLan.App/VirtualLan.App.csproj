@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <RootNamespace>VirtualLan.App</RootNamespace>
+    <AssemblyName>VirtualLan</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+
+    <!-- Permite compilar em CI mesmo com TFM -windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- A GUI abre o adaptador TAP, roda netsh e instala o driver: tudo exige elevação. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <Product>VirtualLan</Product>
+    <AssemblyTitle>VirtualLan</AssemblyTitle>
+    <Version>1.0.0</Version>
+    <Copyright>Uso pessoal</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Protege a senha lembrada em disco com DPAPI (chave do usuário do Windows). -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VirtualLan.Node\VirtualLan.Node.csproj" />
+    <!-- Permite hospedar o relay dentro da própria GUI (modo "ser o servidor"). -->
+    <ProjectReference Include="..\VirtualLan.Relay\VirtualLan.Relay.csproj" />
+  </ItemGroup>
+
+</Project>
