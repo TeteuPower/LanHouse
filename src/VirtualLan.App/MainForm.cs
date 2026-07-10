@@ -42,6 +42,7 @@ internal sealed class MainForm : Form
     private readonly Label _statusLabel = new();
     private readonly NotifyIcon _tray = new();
     private readonly System.Windows.Forms.Timer _peersTimer = new() { Interval = 1000 };
+    private readonly Icon? _appIcon = LoadAppIcon();
 
     // Estado de runtime
     private NodeService? _node;
@@ -60,6 +61,7 @@ internal sealed class MainForm : Form
         ClientSize = new Size(760, 620);
         MinimumSize = new Size(640, 560);
         StartPosition = FormStartPosition.CenterScreen;
+        if (_appIcon is not null) Icon = _appIcon;
 
         BuildUi();
         BuildTray();
@@ -328,11 +330,24 @@ internal sealed class MainForm : Form
         menu.Items.Add("Abrir", null, (_, _) => RestoreFromTray());
         menu.Items.Add("Sair", null, (_, _) => Close());
 
-        _tray.Icon = SystemIcons.Application;
+        _tray.Icon = _appIcon ?? SystemIcons.Application;
         _tray.Text = "VirtualLan";
         _tray.Visible = false;
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => RestoreFromTray();
+    }
+
+    private static Icon? LoadAppIcon()
+    {
+        try
+        {
+            using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("VirtualLan.App.app.ico");
+            return stream is null ? null : new Icon(stream);
+        }
+        catch
+        {
+            return null; // sem ícone embutido: cai para o ícone padrão do sistema
+        }
     }
 
     private Label MakeLabel(string text) => new()
@@ -837,6 +852,7 @@ internal sealed class MainForm : Form
             try { _node?.Dispose(); } catch { /* idem */ }
             try { _relayHost?.Dispose(); } catch { /* idem */ }
             try { _connectCts?.Dispose(); } catch { /* idem */ }
+            try { _appIcon?.Dispose(); } catch { /* idem */ }
             _peersTimer.Dispose();
         }
 

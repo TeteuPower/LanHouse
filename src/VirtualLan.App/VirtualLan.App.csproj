@@ -20,6 +20,8 @@
     <!-- A GUI abre o adaptador TAP, roda netsh e instala o driver: tudo exige elevação. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
+    <ApplicationIcon>app.ico</ApplicationIcon>
+
     <Product>VirtualLan</Product>
     <AssemblyTitle>VirtualLan</AssemblyTitle>
     <Version>1.0.0</Version>
@@ -29,6 +31,11 @@
   <ItemGroup>
     <!-- Protege a senha lembrada em disco com DPAPI (chave do usuário do Windows). -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embutido também como recurso para a janela/bandeja carregarem o ícone em runtime. -->
+    <EmbeddedResource Include="app.ico" />
   </ItemGroup>
 
   <ItemGroup>
