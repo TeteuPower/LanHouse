@@ -3,6 +3,33 @@
 > Documento para o próximo agente (Claude no VS Code) assumir o desenvolvimento.
 > Escrito ao pausar o trabalho a pedido do usuário. Leia inteiro antes de tocar em código.
 
+## Status (atualização — entrega concluída)
+
+O produto pedido está **pronto e empacotado**. O que era "o que falta" (§5) foi feito, com
+algumas decisões diferentes do plano original, guiadas pelo pedido do usuário ("me entregue
+pronto, sem 40 min de configuração"):
+
+- **GUI `VirtualLan.exe`** (WinForms, `src/VirtualLan.App`): conectar/desconectar, lista de
+  participantes, log, bandeja, preferências. Instala o TAP sozinho na 1ª vez.
+- **Instalador do TAP em C#** (`TapInstaller.cs`) — sem PowerShell para o usuário.
+- **Modo servidor embutido**: a própria GUI hospeda o relay, abre o firewall, tenta UPnP no
+  roteador e mostra o endereço para compartilhar — elimina a necessidade de VPS no caso comum
+  (usuário sem CGNAT). O relay dedicado (Windows/Linux) segue disponível em `dist/extras`.
+- **Empacotamento** (`scripts/package.ps1`): `dist/VirtualLan/` + `dist/VirtualLan.zip`
+  autocontido (sem instalar .NET). Docs voltados à GUI (`README`, `docs/TUTORIAL.md`, `LEIA-ME`).
+- **Verificação**: build Release limpo, 35/35 testes, detecção de adaptador validada no registro
+  real (o bug do `root\tap0901` está corrigido de verdade), relay autocontido rodando, UPnP do
+  roteador respondendo, e uma **revisão adversarial multiagente** cujos achados reais foram
+  corrigidos (congelamento da UI no modo servidor, exceções não tratadas, coerência de settings).
+
+O que **não** foi feito (e por quê): o laboratório de NAT em Linux (§6) e a extração do
+`NodeEngine` para o Core (§7) eram para permitir teste em Linux — mas o trabalho passou a rodar
+no **Windows real** do usuário, onde o motor/relay já são cobertos pelos testes e a detecção do
+TAP foi validada no registro real. O único ponto não provável fora de uma sessão elevada é o
+ioctl do TAP (abrir/ler/escrever quadros) e o `netsh` de IP — exige Administrador.
+
+O restante deste documento é o plano histórico do agente anterior; leia como contexto.
+
 ## 0. Resumo em uma frase
 
 VirtualLan é um "Garena/Hamachi caseiro": um **switch Ethernet virtual distribuído** que faz
