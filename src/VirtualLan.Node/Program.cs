@@ -13,6 +13,7 @@ const string Usage = """
       --adapter, -a <nome>         Nome do adaptador TAP (se houver mais de um).
       --port         <n>           Porta UDP local (padrão: efêmera).
       --list-adapters              Lista os adaptadores TAP instalados e sai.
+      --install-tap                Instala o driver TAP e cria o adaptador, e sai.
       --verbose, -v                Log de depuração.
       --trace                      Log de trace.
       --help,    -h                Esta ajuda.
@@ -47,6 +48,9 @@ for (int i = 0; i < args.Length; i++)
         case "--list-adapters":
             ListAdapters();
             return 0;
+
+        case "--install-tap":
+            return await InstallTapAsync();
 
         case "--verbose" or "-v":
             level = LogLevel.Debug;
@@ -174,6 +178,34 @@ static void ListAdapters()
 
     Console.WriteLine();
     Console.WriteLine("  * = compativel com o VirtualLan");
+}
+
+static async Task<int> InstallTapAsync()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        Console.Error.WriteLine("A instalação do TAP só faz sentido no Windows.");
+        return 1;
+    }
+
+    if (!IsElevated())
+    {
+        Console.Error.WriteLine("Execute como Administrador: instalar o driver TAP exige elevação.");
+        return 1;
+    }
+
+    try
+    {
+        // O próprio TapInstaller já escreve cada passo via Log; não precisa de um progress extra.
+        await TapInstaller.EnsureInstalledAsync(TapInstaller.DefaultAdapterName, progress: null, CancellationToken.None);
+        Console.WriteLine("Driver e adaptador TAP prontos.");
+        return 0;
+    }
+    catch (Exception ex)
+    {
+        Log.Error("Falha ao instalar o adaptador TAP", ex);
+        return 1;
+    }
 }
 
 static bool IsElevated()
